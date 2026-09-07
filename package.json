@@ -1,0 +1,28 @@
+{
+  "name": "telegram-anon-bot",
+  "version": "1.0.0",
+  "description": "Serverless Anonymous Telegram Bot using grammY for Vercel",
+  "main": "api/bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node local-dev.js",
+    "build": "echo 'No build step required for Node.js ES Modules'"
+  },
+  "dependencies": {
+    "grammy": "^1.35.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.7",
+    "https-proxy-agent": "^9.1.0",
+    "socks-proxy-agent": "^10.1.0"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "serverless",
+    "grammy",
+    "vercel"
+  ],
+  "author": "",
+  "license": "MIT"
+}
