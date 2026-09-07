@@ -26,6 +26,51 @@ if (proxyUrl) {
 // ساخت نمونه بات (تنها در صورت وجود توکن تا در صورت نبودن متغیر محیطی، ورسل کرش نکند)
 export const bot = token ? new Bot(token, { client: clientOptions }) : null;
 
+// توابع کمکی برای فرار کاراکترهای HTML
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// تابع تشخیص نوع پیام
+function getMessageType(msg) {
+  if (msg.text) return "📝 متن";
+  if (msg.voice) return "🎤 پیام صوتی (Voice)";
+  if (msg.photo) return "📷 عکس";
+  if (msg.video) return "🎥 ویدیو";
+  if (msg.video_note) return "🔘 ویدیو مسیج (دایره‌ای)";
+  if (msg.sticker) return "🎭 استیکر";
+  if (msg.animation) return "🎞 گیف (GIF)";
+  if (msg.audio) return "🎵 موزیک / صوت";
+  if (msg.document) return "📁 فایل / سند";
+  if (msg.contact) return "📞 شماره تماس";
+  if (msg.location) return "📍 موقعیت مکانی";
+  return "📦 پیام ناشناس";
+}
+
+// دریافت زمان دقیق به وقت ایران (تهران)
+function getTehranTime() {
+  try {
+    return new Intl.DateTimeFormat("fa-IR", {
+      timeZone: "Asia/Tehran",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(new Date());
+  } catch {
+    return new Date().toLocaleTimeString();
+  }
+}
+
 if (bot) {
   // هندلر دستور /start
   bot.command("start", async (ctx) => {
@@ -35,14 +80,14 @@ if (bot) {
       await ctx.reply(
         "👋 <b>سلام ادمین عزیز!</b>\n\n" +
           "ربات آماده دریافت پیام‌های ناشناس است.\n" +
-          "هر زمان کاربری پیامی ارسال کند، همراه با تگ شناسه (<code>#ID_...</code>) برای شما ارسال می‌شود.\n" +
-          "برای پاسخ دادن، کافیست روی همان پیام Reply کنید.",
+          "هنگامی که کاربری پیام دهد، اطلاعات کامل او (نام، یوزرنیم، پرمیوم، ساعت و...) <b>فقط برای شما</b> نمایش داده می‌شود.\n" +
+          "برای پاسخ دادن، کافیست روی همان پیام Reply کنید (هویت شما برای کاربر کاملاً مخفی می‌ماند).",
         { parse_mode: "HTML" }
       );
     } else {
       await ctx.reply(
         "سلام! 👋 به بات پیام ناشناس خوش آمدید.\n\n" +
-          "هر پیامی دارید (متن، عکس، وویس، ویدیو، استیکر و...) همینجا بفرستید تا به صورت کاملاً ناشناس به دست من برسد."
+          "هر پیامی دارید (متن، عکس، وویس، ویدیو، استیکر و...) همینجا بفرستید تا به دست من برسد."
       );
     }
   });
@@ -52,14 +97,15 @@ if (bot) {
     const senderId = ctx.from?.id;
     const isOwner = adminId && senderId.toString() === adminId.toString();
 
-    // در صورتی که پیام از طرف ادمین باشد (پاسخ به پیام ناشناس)
+    // در صورتی که پیام از طرف ادمین باشد (پاسخ ناشناس به کاربر)
     if (isOwner) {
       const replyTo = ctx.message.reply_to_message;
 
       if (!replyTo) {
         await ctx.reply(
           "ℹ️ شما ادمین هستید.\n" +
-            "برای پاسخ دادن به کاربر ناشناس، لطفاً روی پیامی که حاوی تگ شناسه (#ID_...) است Reply کنید."
+            "برای ارسال پاسخ ناشناس به کاربر، لطفاً روی پیامی که حاوی تگ شناسه (<code>#ID_...</code>) است Reply کنید.",
+          { parse_mode: "HTML" }
         );
         return;
       }
@@ -80,15 +126,17 @@ if (bot) {
       const targetUserId = match[1];
 
       try {
+        // ارسال پیام بدون فاش کردن هویت ادمین
         await ctx.api.sendMessage(
           targetUserId,
           "💌 <b>یک پاسخ جدید برای پیام ناشناس شما دریافت شد:</b>",
           { parse_mode: "HTML" }
         );
 
+        // کپی کردن محتوای پاسخ ادمین (متن، وویس، عکس و...) برای کاربر بدون هدر فوروارد
         await ctx.copyMessage(targetUserId);
 
-        await ctx.reply("✅ پاسخ شما با موفقیت برای کاربر ارسال شد.", {
+        await ctx.reply("✅ پاسخ شما با موفقیت و به صورت کاملاً ناشناس برای کاربر ارسال شد.", {
           reply_parameters: { message_id: ctx.message.message_id },
         });
       } catch (error) {
@@ -110,22 +158,45 @@ if (bot) {
     }
 
     try {
-      // 1. کپی پیام برای ادمین
+      // 1. کپی پیام فرستنده برای ادمین
       const copiedMessage = await ctx.copyMessage(adminId);
 
-      // 2. ارسال پیام هدر حاوی شناسه فرستنده
+      // استخراج اطلاعات دقیق فرستنده
+      const firstName = escapeHtml(ctx.from?.first_name || "");
+      const lastName = escapeHtml(ctx.from?.last_name || "");
+      const fullName = [firstName, lastName].filter(Boolean).join(" ") || "بدون نام";
+      const username = ctx.from?.username;
+      const usernameText = username
+        ? `@${escapeHtml(username)} (<a href="https://t.me/${username}">پروفایل</a>)`
+        : "ندارد";
+      const userMention = `<a href="tg://user?id=${senderId}">${fullName}</a>`;
+      const isPremium = ctx.from?.is_premium ? "⭐️ دارد (Telegram Premium)" : "خیر";
+      const langCode = ctx.from?.language_code ? `<code>${escapeHtml(ctx.from.language_code)}</code>` : "نامشخص";
+      const timeStr = getTehranTime();
+      const msgType = getMessageType(ctx.message);
+
+      // 2. ارسال کارت جزئیات کامل فرستنده (فقط برای ادمین)
       await ctx.api.sendMessage(
         adminId,
         `📩 <b>پیام ناشناس جدید دریافت شد!</b>\n\n` +
-          `👤 شناسه پیگیری: <code>#ID_${senderId}</code>\n\n` +
-          `👇 برای ارسال پاسخ به این کاربر، <b>مستقیماً روی همین پیام Reply کنید:</b>`,
+          `👤 <b>اطلاعات فرستنده (فقط برای شما):</b>\n` +
+          `• <b>نام:</b> ${userMention}\n` +
+          `• <b>یوزرنیم:</b> ${usernameText}\n` +
+          `• <b>شناسه عددی (User ID):</b> <code>${senderId}</code>\n` +
+          `• <b>پرمیوم تلگرام:</b> ${isPremium}\n` +
+          `• <b>زبان تلگرام:</b> ${langCode}\n` +
+          `• <b>نوع پیام:</b> ${msgType}\n` +
+          `• <b>زمان ارسال:</b> <code>${timeStr}</code>\n` +
+          `• <b>کد پیگیری:</b> <code>#ID_${senderId}</code>\n\n` +
+          `👇 <b>برای ارسال پاسخ به این شخص، مستقیماً روی همین پیام Reply کنید:</b>`,
         {
           parse_mode: "HTML",
           reply_parameters: { message_id: copiedMessage.message_id },
         }
       );
 
-      await ctx.reply("✅ پیام شما به صورت ناشناس ارسال شد!");
+      // تاییدیه به فرستنده (کاربر فقط این را می‌بیند)
+      await ctx.reply("✅ پیام شما با موفقیت ارسال شد!");
     } catch (error) {
       console.error("Error forwarding anonymous message:", error);
       const errorDesc = error?.description || error?.message || "خطای ناشناخته";
@@ -136,7 +207,6 @@ if (bot) {
       );
     }
   });
-
 
   // مدیریت خطاهای عمومی
   bot.catch((err) => {
