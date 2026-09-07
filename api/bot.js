@@ -1,7 +1,7 @@
 import { Bot, webhookCallback } from "grammy";
 
-const token = process.env.BOT_TOKEN;
-const adminId = process.env.ADMIN_ID;
+const token = process.env.BOT_TOKEN?.trim().replace(/['"]/g, "");
+const adminId = process.env.ADMIN_ID?.trim().replace(/['"]/g, "");
 const proxyUrl = process.env.PROXY_URL || process.env.HTTPS_PROXY || process.env.ALL_PROXY;
 
 let clientOptions = {};
@@ -33,11 +33,11 @@ if (bot) {
 
     if (isOwner) {
       await ctx.reply(
-        "👋 سلام ادمین عزیز!\n\n" +
+        "👋 <b>سلام ادمین عزیز!</b>\n\n" +
           "ربات آماده دریافت پیام‌های ناشناس است.\n" +
-          "هر زمان کاربری پیامی ارسال کند، همراه با تگ شناسه (`#ID_...`) برای شما ارسال می‌شود.\n" +
+          "هر زمان کاربری پیامی ارسال کند، همراه با تگ شناسه (<code>#ID_...</code>) برای شما ارسال می‌شود.\n" +
           "برای پاسخ دادن، کافیست روی همان پیام Reply کنید.",
-        { parse_mode: "Markdown" }
+        { parse_mode: "HTML" }
       );
     } else {
       await ctx.reply(
@@ -71,7 +71,8 @@ if (bot) {
       if (!match) {
         await ctx.reply(
           "⚠️ شناسه کاربری در این پیام پیدا نشد.\n" +
-            "لطفاً حتماً روی پیامی که دارای کد پیگیری به فرمت `#ID_...` است ریپلای کنید."
+            "لطفاً حتماً روی پیامی که دارای کد پیگیری به فرمت <code>#ID_...</code> است ریپلای کنید.",
+          { parse_mode: "HTML" }
         );
         return;
       }
@@ -81,7 +82,8 @@ if (bot) {
       try {
         await ctx.api.sendMessage(
           targetUserId,
-          "💌 یک پاسخ ناشناس برای پیام شما دریافت شد:"
+          "💌 <b>یک پاسخ جدید برای پیام ناشناس شما دریافت شد:</b>",
+          { parse_mode: "HTML" }
         );
 
         await ctx.copyMessage(targetUserId);
@@ -91,8 +93,10 @@ if (bot) {
         });
       } catch (error) {
         console.error("Error delivering reply:", error);
+        const errorDesc = error?.description || error?.message || "خطای نامشخص";
         await ctx.reply(
-          `❌ ارسال پیام ناموفق بود. ممکن است کاربر ربات را بلاک کرده باشد.\nعلت خطا: ${error.message}`
+          `❌ ارسال پیام ناموفق بود.\nعلت: <code>${errorDesc}</code>`,
+          { parse_mode: "HTML" }
         );
       }
       return;
@@ -101,20 +105,22 @@ if (bot) {
     // در صورتی که پیام از طرف کاربر ناشناس باشد
     if (!adminId) {
       console.error("ADMIN_ID environment variable is not configured!");
-      await ctx.reply("⚠️ خطای سرور: هنوز شناسه ادمین در ربات تنظیم نشده است.");
+      await ctx.reply("⚠️ خطای سرور: هنوز شناسه ادمین (ADMIN_ID) در ربات تنظیم نشده است.");
       return;
     }
 
     try {
+      // 1. کپی پیام برای ادمین
       const copiedMessage = await ctx.copyMessage(adminId);
 
+      // 2. ارسال پیام هدر حاوی شناسه فرستنده
       await ctx.api.sendMessage(
         adminId,
-        `📩 **پیام ناشناس جدید دریافت شد!**\n\n` +
-          `👤 شناسه پیگیری: \`#ID_${senderId}\`\n\n` +
-          `👇 برای ارسال پاسخ به این کاربر، **مستقیماً روی همین پیام Reply کنید:**`,
+        `📩 <b>پیام ناشناس جدید دریافت شد!</b>\n\n` +
+          `👤 شناسه پیگیری: <code>#ID_${senderId}</code>\n\n` +
+          `👇 برای ارسال پاسخ به این کاربر، <b>مستقیماً روی همین پیام Reply کنید:</b>`,
         {
-          parse_mode: "Markdown",
+          parse_mode: "HTML",
           reply_parameters: { message_id: copiedMessage.message_id },
         }
       );
@@ -122,9 +128,15 @@ if (bot) {
       await ctx.reply("✅ پیام شما به صورت ناشناس ارسال شد!");
     } catch (error) {
       console.error("Error forwarding anonymous message:", error);
-      await ctx.reply("❌ متاسفانه در ارسال پیام خطایی رخ داد. لطفاً مجدداً تلاش کنید.");
+      const errorDesc = error?.description || error?.message || "خطای ناشناخته";
+      await ctx.reply(
+        `❌ متاسفانه در ارسال پیام خطایی رخ داد:\n<code>${errorDesc}</code>\n\n` +
+          `💡 <i>نکته: اگر خطا مربوط به chat not found است، مطمئن شوید ادمین یک‌بار ربات را /start کرده است.</i>`,
+        { parse_mode: "HTML" }
+      );
     }
   });
+
 
   // مدیریت خطاهای عمومی
   bot.catch((err) => {
