@@ -5,17 +5,15 @@
   "main": "api/bot.js",
   "type": "module",
   "scripts": {
-    "start": "node local-dev.js",
-    "build": "echo 'No build step required for Node.js ES Modules'"
+    "start": "node local-dev.js"
   },
   "dependencies": {
-    "grammy": "^1.35.0"
-  },
-  "devDependencies": {
     "dotenv": "^16.4.7",
+    "grammy": "^1.35.0",
     "https-proxy-agent": "^9.1.0",
     "socks-proxy-agent": "^10.1.0"
   },
+
   "keywords": [
     "telegram",
     "bot",

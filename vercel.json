@@ -1,9 +1,8 @@
 {
-  "version": 2,
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/api/bot"
+  "functions": {
+    "api/bot.js": {
+      "memory": 1024,
+      "maxDuration": 15
     }
-  ]
+  }
 }
