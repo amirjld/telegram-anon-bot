@@ -1,4 +1,5 @@
 import { Bot, webhookCallback } from "grammy";
+import { createReplyCode, readReplyCode } from "../lib/reply-code.js";
 
 const token = process.env.BOT_TOKEN?.trim().replace(/['"]/g, "");
 const adminId = process.env.ADMIN_ID?.trim().replace(/['"]/g, "");
@@ -80,7 +81,7 @@ if (bot) {
       await ctx.reply(
         "👋 <b>سلام ادمین عزیز!</b>\n\n" +
           "ربات آماده دریافت پیام‌های ناشناس است.\n" +
-          "هنگامی که کاربری پیام دهد، اطلاعات کامل او (نام، یوزرنیم، پرمیوم، ساعت و...) <b>فقط برای شما</b> نمایش داده می‌شود.\n" +
+          "اطلاعات حساب فرستنده نمایش داده نمی‌شود. برای پاسخ، روی پیام دارای کد پاسخ رمزگذاری‌شده Reply کنید.\n" +
           "برای پاسخ دادن، کافیست روی همان پیام Reply کنید (هویت شما برای کاربر کاملاً مخفی می‌ماند).",
         { parse_mode: "HTML" }
       );
@@ -95,7 +96,7 @@ if (bot) {
   // هندلر دریافت کلیه پیام‌ها (متن، مدیا، استیکر و ...)
   bot.on("message", async (ctx) => {
     const senderId = ctx.from?.id;
-    const isOwner = adminId && senderId.toString() === adminId.toString();
+    const isOwner = adminId && senderId?.toString() === adminId.toString();
 
     // در صورتی که پیام از طرف ادمین باشد (پاسخ ناشناس به کاربر)
     if (isOwner) {
@@ -104,26 +105,27 @@ if (bot) {
       if (!replyTo) {
         await ctx.reply(
           "ℹ️ شما ادمین هستید.\n" +
-            "برای ارسال پاسخ ناشناس به کاربر، لطفاً روی پیامی که حاوی تگ شناسه (<code>#ID_...</code>) است Reply کنید.",
+            "برای ارسال پاسخ ناشناس، روی پیام ربات که دارای کد <code>#REPLY_...</code> است Reply کنید.",
           { parse_mode: "HTML" }
         );
         return;
       }
 
-      // جستجوی شناسه کاربر هدف از متن یا کپشن پیام ریپلای‌شده
+      // Only accept authenticated routing codes from this bot's own messages.
       const replyText = replyTo.text || replyTo.caption || "";
-      const match = replyText.match(/#ID_(\d+)/);
+      const match = replyText.match(/#REPLY_([A-Za-z0-9_-]+)(?![A-Za-z0-9_-])/);
+      const targetUserId = replyTo.from?.id === ctx.me.id && match
+        ? readReplyCode(match[1], token)
+        : null;
 
-      if (!match) {
+      if (!targetUserId) {
         await ctx.reply(
-          "⚠️ شناسه کاربری در این پیام پیدا نشد.\n" +
-            "لطفاً حتماً روی پیامی که دارای کد پیگیری به فرمت <code>#ID_...</code> است ریپلای کنید.",
+          "⚠️ کد پاسخ معتبر پیدا نشد.\n" +
+            "روی پیام جدید ربات که دارای کد <code>#REPLY_...</code> است ریپلای کنید. کدهای قدیمی پشتیبانی نمی‌شوند.",
           { parse_mode: "HTML" }
         );
         return;
       }
-
-      const targetUserId = match[1];
 
       try {
         // ارسال پیام بدون فاش کردن هویت ادمین
@@ -140,10 +142,10 @@ if (bot) {
           reply_parameters: { message_id: ctx.message.message_id },
         });
       } catch (error) {
-        console.error("Error delivering reply:", error);
-        const errorDesc = error?.description || error?.message || "خطای نامشخص";
+        // Telegram errors may contain recipient IDs; do not echo them to admins.
+        console.error("Error delivering reply", { errorCode: error?.error_code });
         await ctx.reply(
-          `❌ ارسال پیام ناموفق بود.\nعلت: <code>${errorDesc}</code>`,
+          "❌ ارسال پاسخ ناموفق بود. لطفاً بعداً دوباره تلاش کنید.",
           { parse_mode: "HTML" }
         );
       }
@@ -161,6 +163,7 @@ if (bot) {
       // 1. کپی پیام فرستنده برای ادمین
       const copiedMessage = await ctx.copyMessage(adminId);
 
+      /* Sender identity card disabled for privacy, including the raw #ID_ tag.
       // استخراج اطلاعات دقیق فرستنده
       const firstName = escapeHtml(ctx.from?.first_name || "");
       const lastName = escapeHtml(ctx.from?.last_name || "");
@@ -189,6 +192,20 @@ if (bot) {
           `• <b>زمان ارسال:</b> <code>${timeStr}</code>\n` +
           `• <b>کد پیگیری:</b> <code>#ID_${senderId}</code>\n\n` +
           `👇 <b>برای ارسال پاسخ به این شخص، مستقیماً روی همین پیام Reply کنید:</b>`,
+        {
+          parse_mode: "HTML",
+          reply_parameters: { message_id: copiedMessage.message_id },
+        }
+      );
+
+      */
+
+      const replyCode = createReplyCode(senderId, token);
+      await ctx.api.sendMessage(
+        adminId,
+        `📩 <b>پیام ناشناس جدید دریافت شد!</b>\n\n` +
+          `<code>#REPLY_${replyCode}</code>\n\n` +
+          `برای ارسال پاسخ، روی همین پیام Reply کنید.`,
         {
           parse_mode: "HTML",
           reply_parameters: { message_id: copiedMessage.message_id },

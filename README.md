@@ -8,7 +8,7 @@
 - **کاملاً رایگان و Serverless:** بدون نیاز به روشن نگه داشتن سرور شخصی یا پرداخت هزینه سرور (اجرا از طریق Webhook).
 - **بدون نیاز به دیتابیس:** سیستم با استفاده از قابلیت Reply و Message ID تلگرام کار می‌کند و هیچ دیتابیسی نیاز ندارد.
 - **پشتیبانی از تمام فرمت‌های پیام:** متن، عکس، وویس، ویدیو، استیکر، گیف و فایل.
-- **حفظ حریم خصوصی فرستنده:** هویت فرستنده کاملاً مخفی می‌ماند و فقط شناسه عددی جهت پاسخ‌دهی به ادمین نشان داده می‌شود.
+- **حفظ حریم خصوصی فرستنده:** اطلاعات حساب فرستنده به ادمین نمایش داده نمی‌شود؛ پاسخ‌دهی با کد تصادفی و رمزگذاری‌شده انجام می‌شود. محتوایی که کاربر خودش ارسال می‌کند (مانند نام در متن، شماره تماس یا موقعیت مکانی) بدون حذف محتوا کپی می‌شود.
 - **امکان تست محلی:** دارای اسکریپت Long-polling برای تست ربات روی سیستم خودتان پیش از استقرار.
 
 ---
@@ -80,6 +80,21 @@ https://api.telegram.org/bot123456789:ABCdefGhIJKlmNo/setWebhook?url=https://my-
 1. **لینک ربات خود را به اشتراک بگذارید:**
    لینک ربات خود (مثلاً `t.me/YourBotName`) را در بیو تلگرام، کانال، یا استوری قرار دهید.
 2. **دریافت پیام ناشناس:**
-   هر فردی به ربات پیام بدهد، پیام او فوراً به اکانت شما ارسال شده و زیر آن پیام یک تگ به فرمت `#ID_12345` قرار می‌گیرد.
+   پیام کاربر بدون هدر فوروارد کپی می‌شود و یک پیام جداگانه با کد رمزگذاری‌شده به فرمت `#REPLY_...` برای پاسخ‌دهی دریافت می‌کنید.
 3. **پاسخ دادن:**
-   کافیست روی پیام حاوی تگ `#ID_...` ریپلای (Reply) کرده و پاسخ خود را بفرستید. ربات پیام شما را به دست همان کاربر خواهد رساند.
+   روی پیام ربات حاوی کد `#REPLY_...` ریپلای (Reply) کنید. ربات کد را بررسی و رمزگشایی کرده و پاسخ را به همان کاربر ارسال می‌کند. کدهای قدیمی `#ID_...` دیگر پذیرفته نمی‌شوند.
+
+## Privacy branch / no deployment
+
+Automatic Vercel Git deployments are disabled for `privacy/hide-sender-details`
+in `vercel.json`. This branch is for review; do not merge to the production branch
+until deployment is intended.
+
+Reply codes use randomized AES-256-GCM encryption with a key derived from
+`BOT_TOKEN`; no new database or environment variable is needed. Rotating the bot
+token invalidates existing reply codes. This hides account metadata from messages
+shown to admins, not from the bot operator with access to the token and runtime.
+Previously delivered identity cards are not deleted by this change.
+
+Run `npm test` for offline privacy and reply-routing checks. Tests use a fake bot
+token and intercept all Telegram API calls; they do not send real messages.

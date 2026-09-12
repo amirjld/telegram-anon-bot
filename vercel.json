@@ -1,4 +1,9 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "privacy/hide-sender-details": false
+    }
+  },
   "functions": {
     "api/bot.js": {
       "memory": 1024,
